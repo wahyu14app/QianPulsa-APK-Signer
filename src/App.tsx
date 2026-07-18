@@ -1,142 +1,185 @@
 import React, { useState } from 'react';
-import { Copy, CheckCircle2, FileCode2, Github, Terminal, Info, Server, Layers, BookOpen, GitBranch, Key, CheckSquare, Webhook } from 'lucide-react';
+import { Copy, CheckCircle2, FileCode2, Github, Terminal, Info, Server, Layers, BookOpen, GitBranch, Key, CheckSquare, Webhook, ArrowRight, Smartphone } from 'lucide-react';
 
 export default function App() {
   const [copiedFile, setCopiedFile] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'action' | 'backend' | 'guide'>('guide');
+  const [activeTab, setActiveTab] = useState<'guide' | 'repoA' | 'repoB' | 'backend'>('guide');
 
-  const actionYmlCode = `name: 'QianPulsa Android Signer'
-description: 'Custom GitHub Action untuk menandatangani APK/AAB QianPulsa secara mandiri.'
-author: 'QianPulsa'
+  const repoAWorkflowCode = `name: Build Unsigned APK
 
-inputs:
-  release_dir:
-    description: 'Direktori tempat build APK/AAB berada (contoh: app/build/outputs/apk/release)'
-    required: true
-  signing_key:
-    description: 'Base64 string dari file keystore (.jks atau .keystore). Kosongkan jika ingin generate otomatis.'
-    required: false
-    default: ''
-  alias:
-    description: 'Alias dari key yang ada di dalam keystore'
-    required: true
-  key_store_password:
-    description: 'Password untuk membuka keystore'
-    required: true
-  key_password:
-    description: 'Password spesifik untuk key alias'
-    required: true
-  seller_id:
-    description: 'ID Seller (digunakan untuk generate nama file keystore unik jika otomatis)'
-    required: false
-    default: 'seller_default'
-  seller_name:
-    description: 'Nama Seller (digunakan untuk informasi CN pada sertifikat)'
-    required: false
-    default: 'QianPulsa Partner'
+on:
+  workflow_dispatch:
+    inputs:
+      sellerId:
+        required: true
+      sellerName:
+        required: true
+      existingKeystore:
+        required: false
 
-outputs:
-  signed_release_file:
-    description: 'Path absolut ke file APK/AAB yang sudah berhasil ditandatangani'
-    value: \${{ steps.sign_app.outputs.signed_file }}
-  generated_keystore_base64:
-    description: 'Base64 keystore baru jika digenerate otomatis (simpan ke DB untuk update APK di masa depan)'
-    value: \${{ steps.generate_keystore.outputs.base64_ks }}
+jobs:
+  build_apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Template Code
+        uses: actions/checkout@v4
+      
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
 
-runs:
-  using: 'composite'
-  steps:
-    - name: Setup direktori dan Keystore
-      id: generate_keystore
-      shell: bash
-      run: |
-        if [ -n "\${{ inputs.signing_key }}" ]; then
-          echo "Menggunakan keystore dari input (sudah ada)..."
-          echo "\${{ inputs.signing_key }}" | base64 --decode > /tmp/signing_keystore.jks
-        else
-          echo "Membuat keystore baru secara dinamis untuk Seller: \${{ inputs.seller_id }}..."
-          keytool -genkey -v \\
-            -keystore /tmp/signing_keystore.jks \\
-            -alias "\${{ inputs.alias }}" \\
-            -keyalg RSA -keysize 2048 -validity 10000 \\
-            -dname "CN=\${{ inputs.seller_name }}, OU=QianPulsa Partner, O=QianPulsa, L=Jakarta, ST=DKI Jakarta, C=ID" \\
-            -storepass "\${{ inputs.key_store_password }}" \\
-            -keypass "\${{ inputs.key_password }}"
-            
-          # Export base64 keystore baru agar bisa dikirim kembali ke Webhook Backend
-          BASE64_KS=$(base64 -w 0 /tmp/signing_keystore.jks)
-          echo "base64_ks=$BASE64_KS" >> $GITHUB_OUTPUT
-        fi
+      - name: Build Unsigned Release APK
+        run: ./gradlew assembleRelease
 
-    - name: Sign APK / AAB
-      id: sign_app
-      shell: bash
-      run: |
-        APP_FILE=$(find \${{ inputs.release_dir }} -type f \\( -name "*.apk" -o -name "*.aab" \\) | head -n 1)
-        
-        if [ -z "$APP_FILE" ]; then
-          echo "Error: Tidak ada file APK/AAB yang ditemukan."
-          exit 1
-        fi
-        
-        BUILD_TOOLS=$(ls -d $ANDROID_SDK_ROOT/build-tools/* | sort -V | tail -n 1)
-        ALIGNED_FILE="/tmp/aligned-app.apk"
-        SIGNED_FILE="\${APP_FILE%.*}-signed.\${APP_FILE##*.}"
-        
-        $BUILD_TOOLS/zipalign -v -p 4 "$APP_FILE" "$ALIGNED_FILE"
-        
-        $BUILD_TOOLS/apksigner sign \\
-          --ks /tmp/signing_keystore.jks \\
-          --ks-key-alias "\${{ inputs.alias }}" \\
-          --ks-pass "pass:\${{ inputs.key_store_password }}" \\
-          --key-pass "pass:\${{ inputs.key_password }}" \\
-          --out "$SIGNED_FILE" \\
-          "$ALIGNED_FILE"
+      - name: Upload Unsigned APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-apk-\${{ github.event.inputs.sellerId }}
+          path: app/build/outputs/apk/release/*.apk
+          retention-days: 1
+
+      - name: Trigger Signer Repository (Repo B)
+        uses: actions/github-script@v7
+        with:
+          github-token: \${{ secrets.PAT_TOKEN }}
+          script: |
+            github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: 'qianpulsa-apk-signer', # Nama Repo B Anda
+              workflow_id: 'sign-apk.yml',
+              ref: 'main',
+              inputs: {
+                source_repo: context.repo.owner + '/' + context.repo.repo,
+                run_id: context.runId.toString(),
+                seller_id: '\${{ github.event.inputs.sellerId }}',
+                seller_name: '\${{ github.event.inputs.sellerName }}',
+                existing_keystore: '\${{ github.event.inputs.existingKeystore }}'
+              }
+            })`;
+
+  const repoBWorkflowCode = `name: Sign APK & Webhook
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_repo:
+        required: true
+      run_id:
+        required: true
+      seller_id:
+        required: true
+      seller_name:
+        required: true
+      existing_keystore:
+        required: false
+
+jobs:
+  sign_and_notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Unsigned APK dari Template Repo
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          github_token: \${{ secrets.PAT_TOKEN }}
+          repo: \${{ github.event.inputs.source_repo }}
+          run_id: \${{ github.event.inputs.run_id }}
+          name: unsigned-apk-\${{ github.event.inputs.seller_id }}
+          path: unsigned-app
+
+      - name: Setup Android Build Tools
+        run: |
+          BUILD_TOOLS=$(ls -d $ANDROID_SDK_ROOT/build-tools/* | sort -V | tail -n 1)
+          echo "BUILD_TOOLS=$BUILD_TOOLS" >> $GITHUB_ENV
+
+      - name: Generate or Load Keystore
+        id: keystore
+        run: |
+          if [ -n "\${{ github.event.inputs.existing_keystore }}" ]; then
+            echo "Menggunakan existing keystore..."
+            echo "\${{ github.event.inputs.existing_keystore }}" | base64 --decode > /tmp/keystore.jks
+          else
+            echo "Membuat keystore dinamis..."
+            keytool -genkey -v \\
+              -keystore /tmp/keystore.jks \\
+              -alias "key0" \\
+              -keyalg RSA -keysize 2048 -validity 10000 \\
+              -dname "CN=\${{ github.event.inputs.seller_name }}, OU=QianPulsa Partner, O=QianPulsa, C=ID" \\
+              -storepass "qianpulsapass" \\
+              -keypass "qianpulsapass"
+              
+            BASE64_KS=$(base64 -w 0 /tmp/keystore.jks)
+            echo "base64_ks=$BASE64_KS" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Zipalign & Sign APK
+        run: |
+          APK_FILE=$(find unsigned-app -name "*.apk" | head -n 1)
+          ALIGNED_APK="/tmp/aligned.apk"
+          SIGNED_APK="signed-app-\${{ github.event.inputs.seller_id }}.apk"
           
-        $BUILD_TOOLS/apksigner verify "$SIGNED_FILE"
-        echo "signed_file=$SIGNED_FILE" >> $GITHUB_OUTPUT
-        
-    - name: Cleanup Keystore
-      shell: bash
-      if: always()
-      run: |
-        rm -f /tmp/signing_keystore.jks
-        rm -f /tmp/aligned-app.apk`;
+          $BUILD_TOOLS/zipalign -v -p 4 "$APK_FILE" "$ALIGNED_APK"
+          $BUILD_TOOLS/apksigner sign \\
+            --ks /tmp/keystore.jks \\
+            --ks-key-alias "key0" \\
+            --ks-pass "pass:qianpulsapass" \\
+            --key-pass "pass:qianpulsapass" \\
+            --out "$SIGNED_APK" \\
+            "$ALIGNED_APK"
+            
+          echo "SIGNED_APK_PATH=$SIGNED_APK" >> $GITHUB_ENV
 
-  const nodeJsWorkerCode = `import { Worker, Job } from 'bullmq';
+      - name: Upload Signed APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: signed-apk-\${{ github.event.inputs.seller_id }}
+          path: \${{ env.SIGNED_APK_PATH }}
+          retention-days: 7
+
+      - name: Kirim Webhook ke Dashboard QianPulsa
+        run: |
+          curl -X POST "https://api.qianpulsa.com/api/webhook/github-build" \\
+          -H "Content-Type: application/json" \\
+          -d '{
+            "sellerId": "\${{ github.event.inputs.seller_id }}",
+            "status": "COMPLETED",
+            "signedArtifactName": "signed-apk-\${{ github.event.inputs.seller_id }}",
+            "signerRunId": "\${{ github.run_id }}",
+            "newKeystoreBase64": "\${{ steps.keystore.outputs.base64_ks }}"
+          }'`;
+
+  const backendWorkerCode = `import { Worker, Job } from 'bullmq';
 import axios from 'axios';
 import Redis from 'ioredis';
 
-// Konfigurasi Redis QianPulsa
 const redisConnection = new Redis(process.env.REDIS_URL || 'redis://127.0.0.1:6379');
 
 interface BuildApkPayload {
   sellerId: string;
   appName: string;
-  appPackage: string;
-  existingKeystoreBase64?: string; // Dapat dari DB (Prisma)
+  existingKeystoreBase64?: string;
 }
 
 /**
- * Worker BullMQ: Menerima antrean pembuatan APK dari Dashboard Seller
- * dan memicu GitHub Actions REST API untuk mem-build & sign APK.
+ * Worker BullMQ: Memulai Alur Pembuatan APK.
+ * Worker ini HANYA memicu Repo A (android-whitelabel-template).
  */
 export const apkBuilderWorker = new Worker<BuildApkPayload>(
   'QianPulsa-APK-Build-Queue',
   async (job: Job) => {
-    const { sellerId, appName, appPackage, existingKeystoreBase64 } = job.data;
+    const { sellerId, appName, existingKeystoreBase64 } = job.data;
 
     try {
-      console.log(\`[Worker] Memulai build APK untuk Seller: \${sellerId}\`);
+      console.log(\`[Worker] Memicu Repo A (Builder) untuk Seller: \${sellerId}\`);
 
-      // 1. Memanggil GitHub Actions REST API (workflow_dispatch)
       const GITHUB_TOKEN = process.env.GITHUB_PAT;
       const REPO_OWNER = process.env.GITHUB_ORG_NAME; // Cth: 'QianPulsa'
-      const REPO_NAME = 'android-whitelabel-template';
-      const WORKFLOW_ID = 'build-and-sign.yml';
+      const REPO_A_NAME = 'android-whitelabel-template';
+      const WORKFLOW_ID = 'build.yml';
 
-      const response = await axios.post(
-        \`https://api.github.com/repos/\${REPO_OWNER}/\${REPO_NAME}/actions/workflows/\${WORKFLOW_ID}/dispatches\`,
+      await axios.post(
+        \`https://api.github.com/repos/\${REPO_OWNER}/\${REPO_A_NAME}/actions/workflows/\${WORKFLOW_ID}/dispatches\`,
         {
           ref: 'main',
           inputs: {
@@ -153,26 +196,39 @@ export const apkBuilderWorker = new Worker<BuildApkPayload>(
         }
       );
 
-      if (response.status === 204) {
-        console.log(\`[Worker] Workflow GitHub berhasil dipicu untuk \${sellerId}.\`);
-      }
-
+      console.log(\`[Worker] Berhasil memicu Repo A. Menunggu webhook dari Repo B (Signer)...\`);
     } catch (error: any) {
-      console.error(\`[Worker] Gagal memicu GitHub Action:\`, error.response?.data || error.message);
+      console.error(\`[Worker] Gagal memicu Repo A:\`, error.response?.data || error.message);
       throw error;
     }
   },
   { connection: redisConnection }
 );
 
-// Listener untuk memantau status antrean
-apkBuilderWorker.on('completed', (job) => {
-  console.log(\`Job \${job.id} selesai. Build dalam proses di GitHub.\`);
+// --- WEBHOOK RECEIVER (Express Route) ---
+// Contoh endpoint: POST /api/webhook/github-build
+/*
+app.post('/api/webhook/github-build', async (req, res) => {
+  const { sellerId, status, signedArtifactName, signerRunId, newKeystoreBase64 } = req.body;
+  
+  if (status === 'COMPLETED') {
+    // 1. Update status APK seller di database (Prisma)
+    // 2. Simpan newKeystoreBase64 ke database jika ada (untuk build berikutnya)
+    // 3. Simpan signerRunId agar Dashboard bisa mendownload Artifact via GitHub API
+    
+    await prisma.sellerApp.update({
+      where: { sellerId },
+      data: {
+        buildStatus: 'READY',
+        keystoreBase64: newKeystoreBase64 || undefined,
+        latestGithubRunId: signerRunId
+      }
+    });
+  }
+  
+  res.sendStatus(200);
 });
-
-apkBuilderWorker.on('failed', (job, err) => {
-  console.log(\`Job \${job?.id} gagal:\`, err);
-});`;
+*/`;
 
   const handleCopy = (content: string, id: string) => {
     navigator.clipboard.writeText(content);
@@ -181,61 +237,104 @@ apkBuilderWorker.on('failed', (job, err) => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans">
-      {/* Header Admin */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-20">
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-10 shadow-sm">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="bg-blue-600 text-white p-2 rounded-lg">
               <Github className="w-5 h-5" />
             </div>
             <div>
               <h1 className="text-lg font-bold text-slate-900 leading-tight">QianPulsa Admin</h1>
-              <p className="text-xs text-slate-500 font-medium">Platform Arsitektur & Konfigurasi</p>
+              <p className="text-xs text-slate-500 font-medium">Arsitektur Pipeline APK (Multi-Repo)</p>
             </div>
           </div>
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
         
         {/* Navigation Tabs */}
-        <div className="flex space-x-1 bg-slate-200/50 p-1 rounded-lg w-fit">
+        <div className="flex flex-wrap gap-2 bg-slate-200/50 p-1.5 rounded-xl w-fit">
           <button
             onClick={() => setActiveTab('guide')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeTab === 'guide' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+              activeTab === 'guide' ? 'bg-white text-blue-700 shadow-sm ring-1 ring-slate-200/50' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
             }`}
           >
             <BookOpen className="w-4 h-4" />
             Panduan Developer
           </button>
           <button
-            onClick={() => setActiveTab('action')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeTab === 'action' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+            onClick={() => setActiveTab('repoA')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+              activeTab === 'repoA' ? 'bg-white text-blue-700 shadow-sm ring-1 ring-slate-200/50' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+            }`}
+          >
+            <Smartphone className="w-4 h-4" />
+            Repo A (Builder)
+          </button>
+          <button
+            onClick={() => setActiveTab('repoB')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+              activeTab === 'repoB' ? 'bg-white text-blue-700 shadow-sm ring-1 ring-slate-200/50' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
             }`}
           >
             <Layers className="w-4 h-4" />
-            GitHub Action (Signer)
+            Repo B (Signer)
           </button>
           <button
             onClick={() => setActiveTab('backend')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeTab === 'backend' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+              activeTab === 'backend' ? 'bg-white text-blue-700 shadow-sm ring-1 ring-slate-200/50' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
             }`}
           >
             <Server className="w-4 h-4" />
-            Node.js (Backend Worker)
+            Backend (BullMQ)
           </button>
         </div>
 
         {activeTab === 'guide' && (
           <div className="space-y-6 animate-in fade-in duration-300">
+            {/* Visual Flow Diagram */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex items-center justify-between text-center overflow-x-auto">
+                <div className="flex flex-col items-center min-w-[120px]">
+                    <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mb-2">
+                        <Server className="w-5 h-5" />
+                    </div>
+                    <span className="text-xs font-bold">Dashboard API</span>
+                    <span className="text-[10px] text-slate-500">Node.js (BullMQ)</span>
+                </div>
+                <ArrowRight className="w-5 h-5 text-slate-300 mx-2" />
+                <div className="flex flex-col items-center min-w-[120px]">
+                    <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mb-2">
+                        <Smartphone className="w-5 h-5" />
+                    </div>
+                    <span className="text-xs font-bold">Repo A (Builder)</span>
+                    <span className="text-[10px] text-slate-500">Build .apk</span>
+                </div>
+                <ArrowRight className="w-5 h-5 text-slate-300 mx-2" />
+                <div className="flex flex-col items-center min-w-[120px]">
+                    <div className="w-12 h-12 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center mb-2">
+                        <Layers className="w-5 h-5" />
+                    </div>
+                    <span className="text-xs font-bold">Repo B (Signer)</span>
+                    <span className="text-[10px] text-slate-500">Sign & Generate Keystore</span>
+                </div>
+                <ArrowRight className="w-5 h-5 text-slate-300 mx-2" />
+                <div className="flex flex-col items-center min-w-[120px]">
+                    <div className="w-12 h-12 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center mb-2">
+                        <Webhook className="w-5 h-5" />
+                    </div>
+                    <span className="text-xs font-bold">Webhook</span>
+                    <span className="text-[10px] text-slate-500">Kembali ke Dashboard</span>
+                </div>
+            </div>
+
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
               <div className="border-b border-slate-200 bg-slate-50 px-6 py-4">
-                <h2 className="text-lg font-semibold text-slate-900">Alur Integrasi & Automasi Build APK</h2>
-                <p className="text-sm text-slate-500 mt-1">Panduan langkah demi langkah untuk developer (Backend & DevOps) QianPulsa.</p>
+                <h2 className="text-lg font-semibold text-slate-900">Pemisahan Tugas (Separation of Concerns)</h2>
+                <p className="text-sm text-slate-500 mt-1">Repo Template hanya bertugas membuild APK. Repo Signer khusus menangani sekuritas, keystore, dan webhook.</p>
               </div>
               
               <div className="p-6 space-y-8">
@@ -246,11 +345,11 @@ apkBuilderWorker.on('failed', (job, err) => {
                   </div>
                   <div>
                     <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                      <GitBranch className="w-4 h-4 text-slate-400" />
-                      Export Proyek Ini ke GitHub (Jadikan Action Repo)
+                      <Key className="w-4 h-4 text-slate-400" />
+                      Siapkan Personal Access Token (PAT)
                     </h3>
                     <p className="text-sm text-slate-600 mt-1">
-                      Karena proyek ini sudah berisi file <code>action.yml</code> di direktori utamanya (root), Anda hanya perlu melakukan <strong>Export ke GitHub</strong> melalui menu pengaturan di AI Studio. Repository hasil export akan langsung berfungsi sebagai Custom GitHub Action Anda sendiri.
+                      Buat PAT di GitHub dengan izin <strong>repo</strong> dan <strong>workflow</strong>. Simpan token ini sebagai repository secret bernama <code>PAT_TOKEN</code> di <strong>KEDUA</strong> repository (Repo A dan Repo B), serta di <code>.env</code> Backend Node.js Anda.
                     </p>
                   </div>
                 </div>
@@ -262,32 +361,12 @@ apkBuilderWorker.on('failed', (job, err) => {
                   </div>
                   <div>
                     <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                      <CheckSquare className="w-4 h-4 text-slate-400" />
-                      Buat Workflow Build di Template Android PPOB
+                      <Smartphone className="w-4 h-4 text-slate-400" />
+                      Konfigurasi Repo A (Template Android)
                     </h3>
                     <p className="text-sm text-slate-600 mt-1">
-                      Di repository template aplikasi Android Anda (contoh: <code>QianPulsa/android-whitelabel-template</code>), buat file workflow baru <code>.github/workflows/build-and-sign.yml</code> dan gunakan action dari repository yang baru saja di-export tadi (misalnya repo Anda bernama <code>QianPulsa/qianpulsa-apk-signer</code>):
+                      Di repo <code>android-whitelabel-template</code>, salin kode dari tab <strong>Repo A (Builder)</strong> dan simpan sebagai <code>.github/workflows/build.yml</code>. Repo ini akan membuild APK mentah, menyimpannya sementara sebagai artifact, lalu men-trigger Repo B melalui API GitHub.
                     </p>
-                    <pre className="mt-3 p-3 bg-slate-900 text-slate-300 text-xs font-mono rounded-lg overflow-x-auto">
-{`jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: ./gradlew assembleRelease
-      
-      # Panggil custom action (Signer) yang baru di-export
-      - uses: username-anda/nama-repo-hasil-export@main
-        id: sign
-        with:
-          release_dir: app/build/outputs/apk/release
-          signing_key: \${{ github.event.inputs.existingKeystore }}
-          seller_id: \${{ github.event.inputs.sellerId }}
-          seller_name: \${{ github.event.inputs.sellerName }}
-          alias: 'key0'
-          key_store_password: 'qianpulsapass'
-          key_password: 'qianpulsapass'`}
-                    </pre>
                   </div>
                 </div>
 
@@ -298,11 +377,11 @@ apkBuilderWorker.on('failed', (job, err) => {
                   </div>
                   <div>
                     <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                      <Key className="w-4 h-4 text-slate-400" />
-                      Dynamic Keystore Generation
+                      <Layers className="w-4 h-4 text-slate-400" />
+                      Konfigurasi Repo B (QianPulsa APK Signer)
                     </h3>
                     <p className="text-sm text-slate-600 mt-1">
-                      Action secara otomatis menggunakan Java <code>keytool</code> untuk membuat file <code>.jks</code> baru jika backend tidak mengirimkan keystore lama. Data seperti nama entitas (CN) di sertifikat akan disesuaikan dengan ID dan Nama Seller.
+                      Buat repository baru bernama <code>qianpulsa-apk-signer</code>. Salin kode dari tab <strong>Repo B (Signer)</strong> dan simpan sebagai <code>.github/workflows/sign-apk.yml</code>. Repo ini akan secara otomatis menarik APK mentah dari Repo A, menandatanganinya, dan menembak Webhook ke server Anda.
                     </p>
                   </div>
                 </div>
@@ -315,26 +394,10 @@ apkBuilderWorker.on('failed', (job, err) => {
                   <div>
                     <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                       <Server className="w-4 h-4 text-slate-400" />
-                      Setup PAT & Integrasi Backend Node.js
+                      Integrasi Backend Node.js
                     </h3>
                     <p className="text-sm text-slate-600 mt-1">
-                      Buat <strong>Personal Access Token (PAT)</strong> di GitHub dengan akses <code>repo</code> dan <code>workflow</code>. Simpan di backend (<code>.env</code>) sebagai <code>GITHUB_PAT</code>. Gunakan kode dari tab <strong>Node.js (Backend Worker)</strong> untuk memicu (trigger) API GitHub <code>workflow_dispatch</code> setiap kali Seller mengklik tombol "Build APK" di dashboard.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Step 5 */}
-                <div className="flex gap-4">
-                  <div className="flex-shrink-0 w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold border border-blue-200">
-                    5
-                  </div>
-                  <div>
-                    <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                      <Webhook className="w-4 h-4 text-slate-400" />
-                      Terima Callback URL APK (Webhook)
-                    </h3>
-                    <p className="text-sm text-slate-600 mt-1">
-                      Sebagai sentuhan akhir, tambahkan step di <code>build-and-sign.yml</code> untuk mengirimkan HTTP POST (Webhook) kembali ke backend Node.js (Express) QianPulsa mengabarkan bahwa build selesai beserta link download artifacts-nya. Backend lalu mengupdate record Prisma Seller menjadi <code>COMPLETED</code>.
+                      Backend Anda cukup memicu <strong>Repo A</strong> (lihat tab Backend). Setelah seluruh pipeline selesai, Repo B akan menembak endpoint Webhook Anda. Gunakan <code>signerRunId</code> yang dikirimkan webhook untuk memberikan link download artifact kepada Seller melalui GitHub API (<code>GET /repos/owner/repo/actions/runs/:run_id/artifacts</code>).
                     </p>
                   </div>
                 </div>
@@ -344,14 +407,15 @@ apkBuilderWorker.on('failed', (job, err) => {
           </div>
         )}
 
-        {activeTab === 'action' && (
+        {/* Tab Repo A */}
+        {activeTab === 'repoA' && (
           <div className="space-y-6 animate-in fade-in duration-300">
             <div className="bg-blue-50 border border-blue-100 rounded-xl p-5 flex items-start gap-4">
               <Info className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
               <div>
-                <h3 className="text-sm font-semibold text-blue-900">Mandiri & Terisolasi</h3>
+                <h3 className="text-sm font-semibold text-blue-900">android-whitelabel-template / build.yml</h3>
                 <p className="text-sm text-blue-800 mt-1">
-                  Gunakan kode <code>action.yml</code> ini dalam repository rahasia (private) pada organisasi GitHub Anda. Pastikan versi (tag) digunakan saat memanggil action ini dari repository aplikasi Android (contoh: <code>uses: QianPulsa/android-signer@v1.0.0</code>).
+                  Workflow ini fokus murni mem-build aplikasi. Setelah `.apk` (unsigned) jadi, ia akan di-upload ke artifact, lalu workflow ini akan memanggil API GitHub untuk menjalankan Repo B.
                 </p>
               </div>
             </div>
@@ -360,36 +424,76 @@ apkBuilderWorker.on('failed', (job, err) => {
               <div className="bg-slate-900 px-4 py-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <FileCode2 className="w-4 h-4 text-slate-400" />
-                  <span className="text-sm font-mono text-slate-200">action.yml</span>
+                  <span className="text-sm font-mono text-slate-200">.github/workflows/build.yml</span>
                 </div>
                 <button
-                  onClick={() => handleCopy(actionYmlCode, 'action')}
+                  onClick={() => handleCopy(repoAWorkflowCode, 'repoA')}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors text-xs font-medium"
                 >
-                  {copiedFile === 'action' ? (
+                  {copiedFile === 'repoA' ? (
                     <><CheckCircle2 className="w-3.5 h-3.5 text-green-400" /> Tersalin</>
                   ) : (
                     <><Copy className="w-3.5 h-3.5" /> Salin Kode</>
                   )}
                 </button>
               </div>
-              <div className="p-4 overflow-x-auto bg-[#0d1117]">
+              <div className="p-4 overflow-x-auto bg-[#0d1117] max-h-[500px] overflow-y-auto">
                 <pre className="text-xs font-mono text-slate-300 leading-relaxed">
-                  <code>{actionYmlCode}</code>
+                  <code>{repoAWorkflowCode}</code>
                 </pre>
               </div>
             </section>
           </div>
         )}
 
+        {/* Tab Repo B */}
+        {activeTab === 'repoB' && (
+          <div className="space-y-6 animate-in fade-in duration-300">
+            <div className="bg-purple-50 border border-purple-100 rounded-xl p-5 flex items-start gap-4">
+              <Info className="w-5 h-5 text-purple-600 shrink-0 mt-0.5" />
+              <div>
+                <h3 className="text-sm font-semibold text-purple-900">qianpulsa-apk-signer / sign-apk.yml</h3>
+                <p className="text-sm text-purple-800 mt-1">
+                  Menerima parameter dari Repo A, mendownload artifact unsigned dari Repo A menggunakan <code>dawidd6/action-download-artifact</code>, men-generate keystore (jika seller baru), lalu menandatangani dan mengirim Webhook ke backend Anda.
+                </p>
+              </div>
+            </div>
+
+            <section className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+              <div className="bg-slate-900 px-4 py-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <FileCode2 className="w-4 h-4 text-slate-400" />
+                  <span className="text-sm font-mono text-slate-200">.github/workflows/sign-apk.yml</span>
+                </div>
+                <button
+                  onClick={() => handleCopy(repoBWorkflowCode, 'repoB')}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors text-xs font-medium"
+                >
+                  {copiedFile === 'repoB' ? (
+                    <><CheckCircle2 className="w-3.5 h-3.5 text-green-400" /> Tersalin</>
+                  ) : (
+                    <><Copy className="w-3.5 h-3.5" /> Salin Kode</>
+                  )}
+                </button>
+              </div>
+              <div className="p-4 overflow-x-auto bg-[#0d1117] max-h-[500px] overflow-y-auto">
+                <pre className="text-xs font-mono text-slate-300 leading-relaxed">
+                  <code>{repoBWorkflowCode}</code>
+                </pre>
+              </div>
+            </section>
+          </div>
+        )}
+
+        {/* Tab Backend */}
         {activeTab === 'backend' && (
           <div className="space-y-6 animate-in fade-in duration-300">
             <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-5 flex items-start gap-4">
               <Server className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
               <div>
-                <h3 className="text-sm font-semibold text-emerald-900">Alur Eksekusi White-Label PPOB</h3>
+                <h3 className="text-sm font-semibold text-emerald-900">Alur Eksekusi White-Label PPOB (Node.js)</h3>
                 <p className="text-sm text-emerald-800 mt-1">
-                  Backend menerima request build APK dari Seller, lalu memasukkannya ke antrean <strong>Redis + BullMQ</strong>. Worker akan mengambil job tersebut dan menembak <strong>GitHub Actions REST API</strong> (<code>workflow_dispatch</code>). Di dalam GitHub, Action kustom (Signer) yang Anda buat sebelumnya akan dieksekusi.
+                  Backend hanya menembak API GitHub untuk memicu <strong>Repo A</strong>. Webhook kemudian dipasang untuk mendengarkan hasil akhir (Signed APK) yang dikirim oleh <strong>Repo B</strong>.
                 </p>
               </div>
             </div>
@@ -401,7 +505,7 @@ apkBuilderWorker.on('failed', (job, err) => {
                   <span className="text-sm font-mono text-slate-200">src/workers/githubBuilder.ts</span>
                 </div>
                 <button
-                  onClick={() => handleCopy(nodeJsWorkerCode, 'node')}
+                  onClick={() => handleCopy(backendWorkerCode, 'node')}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors text-xs font-medium"
                 >
                   {copiedFile === 'node' ? (
@@ -411,9 +515,9 @@ apkBuilderWorker.on('failed', (job, err) => {
                   )}
                 </button>
               </div>
-              <div className="p-4 overflow-x-auto bg-[#0d1117]">
+              <div className="p-4 overflow-x-auto bg-[#0d1117] max-h-[500px] overflow-y-auto">
                 <pre className="text-xs font-mono text-slate-300 leading-relaxed">
-                  <code>{nodeJsWorkerCode}</code>
+                  <code>{backendWorkerCode}</code>
                 </pre>
               </div>
             </section>
@@ -424,4 +528,3 @@ apkBuilderWorker.on('failed', (job, err) => {
     </div>
   );
 }
-
