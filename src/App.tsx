@@ -79,14 +79,19 @@ jobs:
           ALIGNED_APK="/tmp/aligned.apk"
           SIGNED_APK="signed-app-\${{ github.event.inputs.sellerId }}.apk"
           
-          $BUILD_TOOLS/zipalign -v -p 4 "$APK_FILE" "$ALIGNED_APK"
-          $BUILD_TOOLS/apksigner sign \\
-            --ks ../../keystore.jks \\
-            --ks-key-alias "key0" \\
-            --ks-pass "pass:qianpulsapass" \\
-            --key-pass "pass:qianpulsapass" \\
-            --out "../../$SIGNED_APK" \\
-            "$ALIGNED_APK"
+          if [ "\${{ github.event.inputs.templateId }}" == "template-test" ]; then
+            echo "Mode tester: Melewati zipalign dan apksigner (mock APK)"
+            cp "$APK_FILE" "../../$SIGNED_APK"
+          else
+            $BUILD_TOOLS/zipalign -v -p 4 "$APK_FILE" "$ALIGNED_APK"
+            $BUILD_TOOLS/apksigner sign \\
+              --ks ../../keystore.jks \\
+              --ks-key-alias "key0" \\
+              --ks-pass "pass:qianpulsapass" \\
+              --key-pass "pass:qianpulsapass" \\
+              --out "../../$SIGNED_APK" \\
+              "$ALIGNED_APK"
+          fi
             
           echo "SIGNED_APK_PATH=$SIGNED_APK" >> $GITHUB_ENV
 
