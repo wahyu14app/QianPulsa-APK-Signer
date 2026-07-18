@@ -1,9 +1,22 @@
 import React, { useState } from 'react';
-import { Copy, CheckCircle2, FileCode2, Github, Terminal, Info, Server, Layers, BookOpen, Key, CheckSquare, Webhook, ArrowRight, Smartphone, Settings, Paintbrush, Braces } from 'lucide-react';
+import { Copy, CheckCircle2, FileCode2, Github, Terminal, Info, Server, Layers, BookOpen, Key, CheckSquare, Webhook, ArrowRight, Smartphone, Settings, Paintbrush, Braces, Play } from 'lucide-react';
 
 export default function App() {
   const [copiedFile, setCopiedFile] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'guide' | 'action' | 'script' | 'backend'>('guide');
+  const [activeTab, setActiveTab] = useState<'guide' | 'action' | 'script' | 'backend' | 'tester'>('tester');
+
+  // State untuk form tester PPOB
+  const [testConfig, setTestConfig] = useState({
+    appName: 'QianPulsa Demo',
+    packageName: 'com.qianpulsa.demo',
+    versionCode: 1,
+    versionName: '1.0.0',
+    primaryColor: '#1E3A8A',
+    accentColor: '#3B82F6',
+    iconUrl: 'https://ui-avatars.com/api/?name=QP&background=1E3A8A&color=fff',
+    splashUrl: '',
+    apiUrl: 'https://api.qianpulsa.com/seller/demo123'
+  });
 
   const githubActionCode = `name: Build & Sign PPOB White-Label
 
@@ -318,6 +331,15 @@ export default router;`;
             <Server className="w-4 h-4" />
             API Backend
           </button>
+          <button
+            onClick={() => setActiveTab('tester')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+              activeTab === 'tester' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+            }`}
+          >
+            <Play className="w-4 h-4" />
+            Simulasi PPOB (Tester)
+          </button>
         </div>
 
         {activeTab === 'guide' && (
@@ -532,6 +554,262 @@ export default router;`;
                 </pre>
               </div>
             </section>
+          </div>
+        )}
+
+        {/* Tab Tester (Simulasi) */}
+        {activeTab === 'tester' && (
+          <div className="animate-in fade-in duration-300">
+            <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-5 flex items-start gap-4 mb-6">
+              <Play className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
+              <div>
+                <h3 className="text-sm font-semibold text-indigo-900">Uji Coba Visual Aplikasi Seller (White-Label)</h3>
+                <p className="text-sm text-indigo-800 mt-1">
+                  Ubah konfigurasi di bawah ini untuk melihat bagaimana tampilan aplikasi seller akan berubah secara dinamis (Data-Driven). Parameter ini yang akan dikirim ke script GitHub Actions.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+              {/* Kolom Kiri: Form Konfigurasi */}
+              <div className="lg:col-span-7 space-y-6">
+                
+                {/* Section: Identitas & Build */}
+                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                  <h3 className="font-semibold text-slate-800 mb-4 flex items-center gap-2">
+                    <Settings className="w-4 h-4 text-slate-400" /> Identitas & Build
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Nama Aplikasi (appName)</label>
+                      <input 
+                        type="text" 
+                        value={testConfig.appName}
+                        onChange={e => setTestConfig({...testConfig, appName: e.target.value})}
+                        className="w-full border border-slate-300 px-3 py-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Package Name</label>
+                      <input 
+                        type="text" 
+                        value={testConfig.packageName}
+                        onChange={e => setTestConfig({...testConfig, packageName: e.target.value})}
+                        className="w-full border border-slate-300 px-3 py-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Version Code</label>
+                      <input 
+                        type="number" 
+                        value={testConfig.versionCode}
+                        onChange={e => setTestConfig({...testConfig, versionCode: parseInt(e.target.value) || 1})}
+                        className="w-full border border-slate-300 px-3 py-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Version Name</label>
+                      <input 
+                        type="text" 
+                        value={testConfig.versionName}
+                        onChange={e => setTestConfig({...testConfig, versionName: e.target.value})}
+                        className="w-full border border-slate-300 px-3 py-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section: Visual & Branding */}
+                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                  <h3 className="font-semibold text-slate-800 mb-4 flex items-center gap-2">
+                    <Paintbrush className="w-4 h-4 text-slate-400" /> Visual & Branding
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Warna Utama (primaryColor)</label>
+                      <div className="flex gap-2">
+                        <input 
+                          type="color" 
+                          value={testConfig.primaryColor}
+                          onChange={e => setTestConfig({...testConfig, primaryColor: e.target.value})}
+                          className="h-9 w-12 cursor-pointer rounded border border-slate-300"
+                        />
+                        <input 
+                          type="text" 
+                          value={testConfig.primaryColor}
+                          onChange={e => setTestConfig({...testConfig, primaryColor: e.target.value})}
+                          className="flex-1 border border-slate-300 px-3 py-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none font-mono uppercase"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Warna Aksen (accentColor)</label>
+                      <div className="flex gap-2">
+                        <input 
+                          type="color" 
+                          value={testConfig.accentColor}
+                          onChange={e => setTestConfig({...testConfig, accentColor: e.target.value})}
+                          className="h-9 w-12 cursor-pointer rounded border border-slate-300"
+                        />
+                        <input 
+                          type="text" 
+                          value={testConfig.accentColor}
+                          onChange={e => setTestConfig({...testConfig, accentColor: e.target.value})}
+                          className="flex-1 border border-slate-300 px-3 py-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none font-mono uppercase"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section: Sistem, API & Keamanan */}
+                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                  <h3 className="font-semibold text-slate-800 mb-4 flex items-center gap-2">
+                    <Key className="w-4 h-4 text-slate-400" /> Sistem, API & Keamanan
+                  </h3>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">API Endpoint Backend (apiUrl)</label>
+                    <input 
+                      type="text" 
+                      value={testConfig.apiUrl}
+                      onChange={e => setTestConfig({...testConfig, apiUrl: e.target.value})}
+                      className="w-full border border-slate-300 px-3 py-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono"
+                    />
+                    <p className="text-[10px] text-slate-500 mt-1">Aplikasi Android akan menggunakan URL ini untuk mengambil data produk, transaksi, dll.</p>
+                  </div>
+                </div>
+
+                {/* Simulated Output JSON */}
+                <div className="bg-slate-900 rounded-xl overflow-hidden shadow-sm">
+                  <div className="bg-slate-800 px-4 py-2 border-b border-slate-700 flex justify-between items-center">
+                    <span className="text-xs font-medium text-slate-300">Simulasi JSON Response (Endpoint /api/builder/config/:id)</span>
+                  </div>
+                  <div className="p-4 overflow-x-auto">
+                    <pre className="text-xs text-green-400 font-mono">
+                      {JSON.stringify({ data: testConfig }, null, 2)}
+                    </pre>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Kolom Kanan: Mockup Smartphone */}
+              <div className="lg:col-span-5 flex justify-center lg:justify-end">
+                <div className="relative mx-auto border-gray-800 dark:border-gray-800 bg-gray-800 border-[8px] rounded-[2.5rem] h-[600px] w-[300px] shadow-2xl">
+                  {/* Notch */}
+                  <div className="w-[100px] h-[24px] bg-gray-800 absolute top-0 left-1/2 -translate-x-1/2 rounded-b-[1rem] z-20 flex justify-center items-center">
+                     <div className="w-12 h-1.5 bg-gray-900 rounded-full"></div>
+                  </div>
+                  
+                  {/* Screen Content */}
+                  <div className="rounded-[2rem] overflow-hidden w-full h-full bg-slate-50 relative flex flex-col">
+                    
+                    {/* App Header (Primary Color) */}
+                    <div 
+                      className="pt-10 pb-4 px-4 shadow-md z-10 transition-colors duration-300 flex items-center gap-3"
+                      style={{ backgroundColor: testConfig.primaryColor }}
+                    >
+                      <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+                        <img 
+                          src={testConfig.iconUrl.replace('1E3A8A', testConfig.primaryColor.replace('#', ''))} 
+                          alt="App Icon" 
+                          className="w-full h-full rounded-full object-cover" 
+                        />
+                      </div>
+                      <div className="text-white font-bold text-lg truncate">
+                        {testConfig.appName}
+                      </div>
+                    </div>
+
+                    {/* App Body */}
+                    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                      
+                      {/* Dashboard Card (Accent Color) */}
+                      <div 
+                        className="rounded-xl p-4 text-white shadow-lg relative overflow-hidden transition-colors duration-300"
+                        style={{ backgroundColor: testConfig.accentColor }}
+                      >
+                        <div className="absolute -right-4 -top-4 w-20 h-20 bg-white/10 rounded-full"></div>
+                        <div className="absolute -left-4 -bottom-4 w-16 h-16 bg-white/10 rounded-full"></div>
+                        <p className="text-xs text-white/80 font-medium mb-1">Sisa Saldo</p>
+                        <h2 className="text-2xl font-bold">Rp 1.250.000</h2>
+                        <div className="mt-3 flex gap-2">
+                          <button className="bg-white/20 hover:bg-white/30 text-white text-xs py-1.5 px-3 rounded-lg font-medium transition-colors">
+                            + Isi Saldo
+                          </button>
+                          <button className="bg-white/20 hover:bg-white/30 text-white text-xs py-1.5 px-3 rounded-lg font-medium transition-colors">
+                            Transfer
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Mock Menus */}
+                      <div className="grid grid-cols-4 gap-3">
+                        {[
+                          { name: 'Pulsa', icon: '📱' },
+                          { name: 'Data', icon: '🌐' },
+                          { name: 'Listrik', icon: '⚡' },
+                          { name: 'Game', icon: '🎮' },
+                          { name: 'E-Money', icon: '💳' },
+                          { name: 'PDAM', icon: '💧' },
+                          { name: 'BPJS', icon: '🏥' },
+                          { name: 'Lainnya', icon: '•••' }
+                        ].map((menu, idx) => (
+                          <div key={idx} className="flex flex-col items-center gap-1.5 cursor-pointer">
+                            <div className="w-12 h-12 bg-white rounded-full shadow-sm flex items-center justify-center border border-slate-100 text-xl hover:scale-105 transition-transform">
+                              {menu.icon}
+                            </div>
+                            <span className="text-[10px] text-slate-600 font-medium">{menu.name}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Latest Transactions */}
+                      <div>
+                        <h3 className="text-xs font-bold text-slate-800 mb-2 mt-2">Transaksi Terakhir</h3>
+                        <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden divide-y divide-slate-100">
+                          {[
+                            { name: 'Pulsa Telkomsel 50rb', price: 'Rp 50.500', status: 'Sukses', color: 'text-green-600' },
+                            { name: 'Token PLN 100rb', price: 'Rp 100.200', status: 'Pending', color: 'text-orange-500' },
+                            { name: 'Topup OVO', price: 'Rp 20.000', status: 'Gagal', color: 'text-red-500' }
+                          ].map((trx, idx) => (
+                            <div key={idx} className="p-3 flex justify-between items-center">
+                              <div>
+                                <p className="text-xs font-medium text-slate-800">{trx.name}</p>
+                                <p className="text-[10px] text-slate-500 mt-0.5">Hari ini, 14:30</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-xs font-bold text-slate-800">{trx.price}</p>
+                                <p className={`text-[10px] font-medium mt-0.5 ${trx.color}`}>{trx.status}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                    </div>
+                    
+                    {/* Bottom Navigation */}
+                    <div className="h-14 bg-white border-t border-slate-200 flex justify-around items-center px-2">
+                      <div className="flex flex-col items-center gap-1 cursor-pointer">
+                        <div className="w-5 h-5 rounded" style={{ backgroundColor: testConfig.primaryColor, maskImage: 'url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27currentColor%27 stroke-width=%272%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27%3E%3Cpath d=%27m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z%27/%3E%3Cpolyline points=%279 22 9 12 15 12 15 22%27/%3E%3C/svg%3E")', WebkitMaskImage: 'url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27currentColor%27 stroke-width=%272%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27%3E%3Cpath d=%27m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z%27/%3E%3Cpolyline points=%279 22 9 12 15 12 15 22%27/%3E%3C/svg%3E")', maskSize: 'cover', WebkitMaskSize: 'cover' }}></div>
+                        <span className="text-[9px] font-bold" style={{ color: testConfig.primaryColor }}>Home</span>
+                      </div>
+                      <div className="flex flex-col items-center gap-1 cursor-pointer opacity-50">
+                        <div className="w-5 h-5 bg-slate-500 rounded" style={{ maskImage: 'url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27currentColor%27 stroke-width=%272%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27%3E%3Cpath d=%27M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z%27/%3E%3Cpolyline points=%2714 2 14 8 20 8%27/%3E%3Cline x1=%2716%27 y1=%2713%27 x2=%278%27 y2=%2713%27/%3E%3Cline x1=%2716%27 y1=%2717%27 x2=%278%27 y2=%2717%27/%3E%3Cpolyline points=%2710 9 9 9 8 9%27/%3E%3C/svg%3E")', WebkitMaskImage: 'url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27currentColor%27 stroke-width=%272%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27%3E%3Cpath d=%27M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z%27/%3E%3Cpolyline points=%2714 2 14 8 20 8%27/%3E%3Cline x1=%2716%27 y1=%2713%27 x2=%278%27 y2=%2713%27/%3E%3Cline x1=%2716%27 y1=%2717%27 x2=%278%27 y2=%2717%27/%3E%3Cpolyline points=%2710 9 9 9 8 9%27/%3E%3C/svg%3E")', maskSize: 'cover', WebkitMaskSize: 'cover' }}></div>
+                        <span className="text-[9px] font-medium text-slate-500">Riwayat</span>
+                      </div>
+                      <div className="flex flex-col items-center gap-1 cursor-pointer opacity-50">
+                        <div className="w-5 h-5 bg-slate-500 rounded" style={{ maskImage: 'url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27currentColor%27 stroke-width=%272%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27%3E%3Cpath d=%27M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2%27/%3E%3Ccircle cx=%2712%27 cy=%277%27 r=%274%27/%3E%3C/svg%3E")', WebkitMaskImage: 'url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27currentColor%27 stroke-width=%272%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27%3E%3Cpath d=%27M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2%27/%3E%3Ccircle cx=%2712%27 cy=%277%27 r=%274%27/%3E%3C/svg%3E")', maskSize: 'cover', WebkitMaskSize: 'cover' }}></div>
+                        <span className="text-[9px] font-medium text-slate-500">Akun</span>
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+              </div>
+
+            </div>
           </div>
         )}
 
