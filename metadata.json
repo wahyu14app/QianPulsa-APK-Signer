@@ -1,0 +1,6 @@
+{
+  "name": "QianPulsa APK Signer",
+  "description": "Generator repository GitHub Action kustom untuk menandatangani APK/AAB.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

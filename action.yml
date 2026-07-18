@@ -1,0 +1,85 @@
+name: 'QianPulsa Android Signer'
+description: 'Custom GitHub Action untuk menandatangani APK/AAB QianPulsa secara mandiri.'
+author: 'QianPulsa'
+
+inputs:
+  release_dir:
+    description: 'Direktori tempat build APK/AAB berada (contoh: app/build/outputs/apk/release)'
+    required: true
+  signing_key:
+    description: 'Base64 string dari file keystore (.jks atau .keystore)'
+    required: true
+  alias:
+    description: 'Alias dari key yang ada di dalam keystore'
+    required: true
+  key_store_password:
+    description: 'Password untuk membuka keystore'
+    required: true
+  key_password:
+    description: 'Password spesifik untuk key alias'
+    required: true
+
+outputs:
+  signed_release_file:
+    description: 'Path absolut ke file APK/AAB yang sudah berhasil ditandatangani'
+    value: ${{ steps.sign_app.outputs.signed_file }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup direktori dan decode Keystore
+      shell: bash
+      run: |
+        echo "Menyiapkan keystore..."
+        # Decode base64 secret ke bentuk file .jks sementara
+        echo "${{ inputs.signing_key }}" | base64 --decode > /tmp/signing_keystore.jks
+
+    - name: Sign APK / AAB
+      id: sign_app
+      shell: bash
+      run: |
+        # 1. Cari file APK atau AAB di dalam direktori
+        APP_FILE=$(find ${{ inputs.release_dir }} -type f \( -name "*.apk" -o -name "*.aab" \) | head -n 1)
+        
+        if [ -z "$APP_FILE" ]; then
+          echo "Error: Tidak ada file APK atau AAB yang ditemukan di direktori ${{ inputs.release_dir }}."
+          exit 1
+        fi
+
+        echo "Ditemukan file untuk ditandatangani: $APP_FILE"
+        
+        # 2. Dapatkan build-tools Android terbaru yang tersedia di runner
+        BUILD_TOOLS=$(ls -d $ANDROID_SDK_ROOT/build-tools/* | sort -V | tail -n 1)
+        echo "Menggunakan build-tools versi: $(basename $BUILD_TOOLS)"
+        
+        ALIGNED_FILE="/tmp/aligned-app.apk"
+        SIGNED_FILE="${APP_FILE%.*}-signed.${APP_FILE##*.}"
+        
+        # 3. Lakukan Zipalign (wajib dilakukan sebelum signing menggunakan apksigner)
+        echo "Menjalankan zipalign..."
+        $BUILD_TOOLS/zipalign -v -p 4 "$APP_FILE" "$ALIGNED_FILE"
+        
+        # 4. Tandatangani menggunakan apksigner
+        echo "Menandatangani aplikasi menggunakan apksigner..."
+        $BUILD_TOOLS/apksigner sign \
+          --ks /tmp/signing_keystore.jks \
+          --ks-key-alias "${{ inputs.alias }}" \
+          --ks-pass "pass:${{ inputs.key_store_password }}" \
+          --key-pass "pass:${{ inputs.key_password }}" \
+          --out "$SIGNED_FILE" \
+          "$ALIGNED_FILE"
+          
+        # 5. Verifikasi hasil signing
+        echo "Memverifikasi hasil tanda tangan..."
+        $BUILD_TOOLS/apksigner verify "$SIGNED_FILE"
+          
+        # Set output untuk digunakan di step (workflow) selanjutnya
+        echo "signed_file=$SIGNED_FILE" >> $GITHUB_OUTPUT
+        
+    - name: Cleanup Keystore
+      shell: bash
+      if: always() # Pastikan keystore selalu dihapus meskipun gagal
+      run: |
+        echo "Menghapus file sementara untuk keamanan..."
+        rm -f /tmp/signing_keystore.jks
+        rm -f /tmp/aligned-app.apk
