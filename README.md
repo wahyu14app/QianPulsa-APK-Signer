@@ -2,6 +2,8 @@
 
 Custom GitHub Action (Composite) yang dirancang khusus untuk menandatangani rilis aplikasi Android (APK/AAB) untuk infrastruktur PPOB White-Label QianPulsa. Action ini beroperasi sepenuhnya mandiri (tanpa dependensi eksternal selain environment bawaan GitHub Actions).
 
+**FITUR BARU**: Mendukung **Dynamic Keystore Generation**. Jika Anda tidak mengirimkan `signing_key` dari secret, action ini akan menggunakan Java `keytool` untuk membuat `.jks` unik secara instan berdasarkan data Seller (memungkinkan 1 Seller = 1 Keystore otomatis) dan mengembalikan format base64-nya ke output.
+
 ## Cara Menggunakan
 
 1. **Export dari AI Studio**: Export (atau push) proyek ini ke GitHub organisasi Anda (contoh: `QianPulsa/android-signer`).
@@ -13,9 +15,17 @@ Custom GitHub Action (Composite) yang dirancang khusus untuk menandatangani rili
 name: Build and Sign Android APK
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
+    inputs:
+      sellerId:
+        description: "ID unik seller"
+        required: true
+      sellerName:
+        description: "Nama Toko / Seller"
+        required: true
+      # Base64 string jika seller sudah punya keystore di DB
+      existingKeystore: 
+        required: false
 
 jobs:
   build:
@@ -39,10 +49,22 @@ jobs:
         id: sign_apk
         with:
           release_dir: app/build/outputs/apk/release
-          signing_key: ${{ secrets.KEYSTORE_BASE64 }}
-          alias: ${{ secrets.KEY_ALIAS }}
-          key_store_password: ${{ secrets.KEYSTORE_PASSWORD }}
-          key_password: ${{ secrets.KEY_PASSWORD }}
+          # Kosongkan jika existingKeystore tidak ada, action akan menggenerate otomatis
+          signing_key: ${{ github.event.inputs.existingKeystore }}
+          seller_id: ${{ github.event.inputs.sellerId }}
+          seller_name: ${{ github.event.inputs.sellerName }}
+          alias: 'key0'
+          key_store_password: 'qianpulsapass'
+          key_password: 'qianpulsapass'
+
+      - name: Send Webhook to Backend
+        run: |
+          curl -X POST "https://api.qianpulsa.com/webhook/github-build" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "sellerId": "${{ github.event.inputs.sellerId }}",
+            "newKeystoreBase64": "${{ steps.sign_apk.outputs.generated_keystore_base64 }}"
+          }'
 
       - name: Upload Signed APK
         uses: actions/upload-artifact@v3
@@ -51,9 +73,3 @@ jobs:
           path: ${{ steps.sign_apk.outputs.signed_release_file }}
 ```
 
-## Persyaratan (Secrets)
-Sebelum menjalankan workflow yang memanggil action ini, pastikan Anda menyimpan rahasia berikut di pengaturan repositori:
-*   `KEYSTORE_BASE64`: Keystore yang diconvert ke format base64. (Gunakan perintah `openssl base64 -in release.keystore -out keystore.txt` pada terminal lokal Anda)
-*   `KEY_ALIAS`: Alias key.
-*   `KEYSTORE_PASSWORD`: Password untuk file keystore.
-*   `KEY_PASSWORD`: Password untuk alias key.

@@ -11,11 +11,12 @@ author: 'QianPulsa'
 
 inputs:
   release_dir:
-    description: 'Direktori tempat build APK/AAB berada'
+    description: 'Direktori tempat build APK/AAB berada (contoh: app/build/outputs/apk/release)'
     required: true
   signing_key:
-    description: 'Base64 string dari file keystore (.jks atau .keystore)'
-    required: true
+    description: 'Base64 string dari file keystore (.jks atau .keystore). Kosongkan jika ingin generate otomatis.'
+    required: false
+    default: ''
   alias:
     description: 'Alias dari key yang ada di dalam keystore'
     required: true
@@ -25,20 +26,47 @@ inputs:
   key_password:
     description: 'Password spesifik untuk key alias'
     required: true
+  seller_id:
+    description: 'ID Seller (digunakan untuk generate nama file keystore unik jika otomatis)'
+    required: false
+    default: 'seller_default'
+  seller_name:
+    description: 'Nama Seller (digunakan untuk informasi CN pada sertifikat)'
+    required: false
+    default: 'QianPulsa Partner'
 
 outputs:
   signed_release_file:
     description: 'Path absolut ke file APK/AAB yang sudah berhasil ditandatangani'
     value: \${{ steps.sign_app.outputs.signed_file }}
+  generated_keystore_base64:
+    description: 'Base64 keystore baru jika digenerate otomatis (simpan ke DB untuk update APK di masa depan)'
+    value: \${{ steps.generate_keystore.outputs.base64_ks }}
 
 runs:
   using: 'composite'
   steps:
-    - name: Setup direktori dan decode Keystore
+    - name: Setup direktori dan Keystore
+      id: generate_keystore
       shell: bash
       run: |
-        echo "Menyiapkan keystore..."
-        echo "\${{ inputs.signing_key }}" | base64 --decode > /tmp/signing_keystore.jks
+        if [ -n "\${{ inputs.signing_key }}" ]; then
+          echo "Menggunakan keystore dari input (sudah ada)..."
+          echo "\${{ inputs.signing_key }}" | base64 --decode > /tmp/signing_keystore.jks
+        else
+          echo "Membuat keystore baru secara dinamis untuk Seller: \${{ inputs.seller_id }}..."
+          keytool -genkey -v \\
+            -keystore /tmp/signing_keystore.jks \\
+            -alias "\${{ inputs.alias }}" \\
+            -keyalg RSA -keysize 2048 -validity 10000 \\
+            -dname "CN=\${{ inputs.seller_name }}, OU=QianPulsa Partner, O=QianPulsa, L=Jakarta, ST=DKI Jakarta, C=ID" \\
+            -storepass "\${{ inputs.key_store_password }}" \\
+            -keypass "\${{ inputs.key_password }}"
+            
+          # Export base64 keystore baru agar bisa dikirim kembali ke Webhook Backend
+          BASE64_KS=$(base64 -w 0 /tmp/signing_keystore.jks)
+          echo "base64_ks=$BASE64_KS" >> $GITHUB_OUTPUT
+        fi
 
     - name: Sign APK / AAB
       id: sign_app
@@ -86,6 +114,7 @@ interface BuildApkPayload {
   sellerId: string;
   appName: string;
   appPackage: string;
+  existingKeystoreBase64?: string; // Dapat dari DB (Prisma)
 }
 
 /**
@@ -95,7 +124,7 @@ interface BuildApkPayload {
 export const apkBuilderWorker = new Worker<BuildApkPayload>(
   'QianPulsa-APK-Build-Queue',
   async (job: Job) => {
-    const { sellerId, appName, appPackage } = job.data;
+    const { sellerId, appName, appPackage, existingKeystoreBase64 } = job.data;
 
     try {
       console.log(\`[Worker] Memulai build APK untuk Seller: \${sellerId}\`);
@@ -112,8 +141,8 @@ export const apkBuilderWorker = new Worker<BuildApkPayload>(
           ref: 'main',
           inputs: {
             sellerId: sellerId,
-            appName: appName,
-            appPackage: appPackage
+            sellerName: appName,
+            existingKeystore: existingKeystoreBase64 || ''
           }
         },
         {
@@ -252,10 +281,12 @@ apkBuilderWorker.on('failed', (job, err) => {
         id: sign
         with:
           release_dir: app/build/outputs/apk/release
-          signing_key: \${{ secrets.KEYSTORE_BASE64 }}
-          alias: \${{ secrets.KEY_ALIAS }}
-          key_store_password: \${{ secrets.KEYSTORE_PASSWORD }}
-          key_password: \${{ secrets.KEY_PASSWORD }}`}
+          signing_key: \${{ github.event.inputs.existingKeystore }}
+          seller_id: \${{ github.event.inputs.sellerId }}
+          seller_name: \${{ github.event.inputs.sellerName }}
+          alias: 'key0'
+          key_store_password: 'qianpulsapass'
+          key_password: 'qianpulsapass'`}
                     </pre>
                   </div>
                 </div>
@@ -268,16 +299,11 @@ apkBuilderWorker.on('failed', (job, err) => {
                   <div>
                     <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                       <Key className="w-4 h-4 text-slate-400" />
-                      Konfigurasi Secrets
+                      Dynamic Keystore Generation
                     </h3>
                     <p className="text-sm text-slate-600 mt-1">
-                      Pastikan di repository template aplikasi Android Anda, Anda telah mengatur <strong>GitHub Repository Secrets</strong> untuk keystore production:
+                      Action secara otomatis menggunakan Java <code>keytool</code> untuk membuat file <code>.jks</code> baru jika backend tidak mengirimkan keystore lama. Data seperti nama entitas (CN) di sertifikat akan disesuaikan dengan ID dan Nama Seller.
                     </p>
-                    <ul className="mt-3 space-y-2 text-sm text-slate-600 list-disc list-inside bg-slate-50 p-4 rounded-lg border border-slate-100">
-                      <li><code>KEYSTORE_BASE64</code>: Isi file <i>.jks</i> yang diconvert ke base64 (<code>openssl base64 -in file.jks</code>)</li>
-                      <li><code>KEY_ALIAS</code>: Alias dari kunci penandatangan</li>
-                      <li><code>KEYSTORE_PASSWORD</code> & <code>KEY_PASSWORD</code>: Password keystore</li>
-                    </ul>
                   </div>
                 </div>
 
