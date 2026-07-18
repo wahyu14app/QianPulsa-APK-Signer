@@ -1,0 +1,93 @@
+name: Build & Sign PPOB White-Label
+
+on:
+  workflow_dispatch:
+    inputs:
+      sellerId:
+        description: 'ID Seller di Database'
+        required: true
+      templateId:
+        description: 'ID Template (contoh: app-v1)'
+        required: true
+        default: 'app-v1'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository (Templates & Scripts)
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js (Untuk Script Builder)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Install Builder Dependencies
+        run: npm install axios xml2js
+
+      - name: Fetch Config & Modify Android Source Code
+        env:
+          QIANPULSA_API_KEY: ${{ secrets.QIANPULSA_API_KEY }}
+        run: node scripts/builder.js ${{ github.event.inputs.sellerId }} ${{ github.event.inputs.templateId }}
+
+      - name: Build Release APK
+        run: |
+          cd apps/${{ github.event.inputs.templateId }}
+          chmod +x ./gradlew
+          ./gradlew assembleRelease
+
+      - name: Setup Android Build Tools
+        run: |
+          BUILD_TOOLS=$(ls -d $ANDROID_SDK_ROOT/build-tools/* | sort -V | tail -n 1)
+          echo "BUILD_TOOLS=$BUILD_TOOLS" >> $GITHUB_ENV
+
+      - name: Sign APK
+        run: |
+          cd apps/${{ github.event.inputs.templateId }}
+          APK_FILE=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          ALIGNED_APK="/tmp/aligned.apk"
+          SIGNED_APK="signed-app-${{ github.event.inputs.sellerId }}.apk"
+          
+          $BUILD_TOOLS/zipalign -v -p 4 "$APK_FILE" "$ALIGNED_APK"
+          $BUILD_TOOLS/apksigner sign \
+            --ks ../../keystore.jks \
+            --ks-key-alias "key0" \
+            --ks-pass "pass:qianpulsapass" \
+            --key-pass "pass:qianpulsapass" \
+            --out "../../$SIGNED_APK" \
+            "$ALIGNED_APK"
+            
+          echo "SIGNED_APK_PATH=$SIGNED_APK" >> $GITHUB_ENV
+
+      - name: Upload Signed APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ github.event.inputs.sellerId }}
+          path: ${{ env.SIGNED_APK_PATH }}
+          retention-days: 7
+
+      - name: Trigger Webhook ke Dashboard QianPulsa
+        env:
+          QIANPULSA_API_KEY: ${{ secrets.QIANPULSA_API_KEY }}
+        run: |
+          NEW_KS=""
+          if [ -f new_keystore_base64.txt ]; then
+            NEW_KS=$(cat new_keystore_base64.txt)
+          fi
+
+          curl -X POST "https://api.qianpulsa.com/api/webhook/github-build" \
+          -H "Content-Type: application/json" \
+          -H "x-api-key: $QIANPULSA_API_KEY" \
+          -d "{
+            \"sellerId\": \"${{ github.event.inputs.sellerId }}\",
+            \"status\": \"COMPLETED\",
+            \"runId\": \"${{ github.run_id }}\",
+            \"newKeystoreBase64\": \"$NEW_KS\"
+          }"
