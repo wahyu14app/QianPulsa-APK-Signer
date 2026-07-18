@@ -35,7 +35,7 @@ jobs:
       - name: Fetch Config & Modify Android Source Code
         env:
           QIANPULSA_API_KEY: ${{ secrets.QIANPULSA_API_KEY }}
-        run: node scripts/builder.js ${{ github.event.inputs.sellerId }} ${{ github.event.inputs.templateId }}
+        run: node scripts/builder.cjs ${{ github.event.inputs.sellerId }} ${{ github.event.inputs.templateId }}
 
       - name: Build Release APK
         run: |

@@ -1,0 +1,10 @@
+#!/bin/bash
+# Mock gradlew untuk template-test
+echo "🚀 Memulai Gradle Build untuk $templateId..."
+mkdir -p app/build/outputs/apk/release
+
+# Membuat mock APK (hanya file zip kosong agar apksigner tidak error)
+# Biasanya apksigner butuh file ZIP/APK valid. Kita buat file dummy sederhana.
+echo "PK" > app/build/outputs/apk/release/app-release-unsigned.apk
+
+echo "✅ Build selesai."

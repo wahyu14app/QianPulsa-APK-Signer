@@ -1,20 +1,18 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# QianPulsa PPOB Android White-Label Builder
 
-# Run and deploy your AI Studio app
+Repositori ini adalah sistem utama untuk otomatisasi build dan signing aplikasi Android PPOB White-Label bagi Mitra/Seller QianPulsa.
 
-This contains everything you need to run your app locally.
+## Arsitektur: Single-Repo Data-Driven
 
-View your app in AI Studio: https://ai.studio/apps/e9fe0503-f924-4b5e-9fb8-54799a310f5d
+Sistem ini menggunakan arsitektur **Single-Repo Data-Driven**, di mana satu repository menyimpan berbagai pilihan template aplikasi (misalnya `template-1`, `template-2`, dll) dan konfigurasi diinjeksi secara dinamis pada saat build (Data-Driven).
 
-## Run Locally
+1. **GitHub Actions (`.github/workflows/build-and-sign.yml`)**: Mengelola alur kerja CI/CD untuk kompilasi dan signing.
+2. **Node.js Builder Script (`scripts/builder.js`)**: Bertugas mengambil data konfigurasi (Nama Aplikasi, Warna Tema, Package Name, dan Keystore) dari Backend QianPulsa, lalu memodifikasi *source code* template.
+3. **Template Aplikasi (`apps/`)**: Folder yang menampung *source code* Android asli untuk setiap tema yang tersedia.
 
-**Prerequisites:**  Node.js
-
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Alur Kerja (Workflow)
+1. **Trigger dari Backend**: Ketika Seller menekan tombol "Build" di Dashboard, Backend akan menembak GitHub REST API untuk memicu Workflow dengan mengirim `sellerId` dan `templateId`.
+2. **Fetch Config & Modify (Data-Driven)**: Script `builder.js` akan mengambil data visual dan branding dari Backend, lalu memodifikasi `build.gradle`, `strings.xml`, dan `colors.xml` di dalam folder template yang dipilih.
+3. **Build APK**: Gradle akan mengompilasi *source code* menjadi *release APK*.
+4. **Sign APK**: `apksigner` menandatangani APK menggunakan *keystore* Seller. Jika Seller baru pertama kali membuild, script akan men-generate *keystore* baru untuk mereka.
+5. **Webhook Callback**: GitHub Actions mengirimkan notifikasi Webhook kembali ke Backend QianPulsa (status sukses, link download Artifact, dan *keystore* baru jika ada).

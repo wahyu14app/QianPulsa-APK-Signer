@@ -7,6 +7,7 @@ export default function App() {
 
   // State untuk form tester PPOB
   const [testConfig, setTestConfig] = useState({
+    templateId: 'template-1',
     appName: 'QianPulsa Demo',
     packageName: 'com.qianpulsa.demo',
     versionCode: 1,
@@ -580,6 +581,18 @@ export default router;`;
                     <Settings className="w-4 h-4 text-slate-400" /> Identitas & Build
                   </h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Tema Aplikasi (templateId)</label>
+                      <select 
+                        value={testConfig.templateId}
+                        onChange={e => setTestConfig({...testConfig, templateId: e.target.value})}
+                        className="w-full border border-slate-300 px-3 py-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-slate-50"
+                      >
+                        <option value="template-1">Template 1 (Classic Minimalist)</option>
+                        <option value="template-2">Template 2 (Modern Premium)</option>
+                        <option value="template-test">Template Test (Mock Build)</option>
+                      </select>
+                    </div>
                     <div>
                       <label className="block text-xs font-medium text-slate-600 mb-1">Nama Aplikasi (appName)</label>
                       <input 
@@ -704,16 +717,16 @@ export default router;`;
                   {/* Screen Content */}
                   <div className="rounded-[2rem] overflow-hidden w-full h-full bg-slate-50 relative flex flex-col">
                     
-                    {/* App Header (Primary Color) */}
+                    {/* App Header */}
                     <div 
-                      className="pt-10 pb-4 px-4 shadow-md z-10 transition-colors duration-300 flex items-center gap-3"
+                      className={`pt-10 pb-6 px-4 z-10 transition-colors duration-300 flex items-center gap-3 ${testConfig.templateId === 'template-2' ? 'rounded-b-[2rem] shadow-sm' : 'shadow-md pb-4'}`}
                       style={{ backgroundColor: testConfig.primaryColor }}
                     >
-                      <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+                      <div className={`w-8 h-8 bg-white/20 flex items-center justify-center shrink-0 ${testConfig.templateId === 'template-2' ? 'rounded-xl' : 'rounded-full'}`}>
                         <img 
                           src={testConfig.iconUrl.replace('1E3A8A', testConfig.primaryColor.replace('#', ''))} 
                           alt="App Icon" 
-                          className="w-full h-full rounded-full object-cover" 
+                          className={`w-full h-full object-cover ${testConfig.templateId === 'template-2' ? 'rounded-xl' : 'rounded-full'}`}
                         />
                       </div>
                       <div className="text-white font-bold text-lg truncate">
@@ -722,11 +735,11 @@ export default router;`;
                     </div>
 
                     {/* App Body */}
-                    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                    <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${testConfig.templateId === 'template-2' ? '-mt-6' : ''}`}>
                       
                       {/* Dashboard Card (Accent Color) */}
                       <div 
-                        className="rounded-xl p-4 text-white shadow-lg relative overflow-hidden transition-colors duration-300"
+                        className={`p-4 text-white shadow-lg relative overflow-hidden transition-colors duration-300 ${testConfig.templateId === 'template-2' ? 'rounded-2xl z-20 border border-white/10' : 'rounded-xl'}`}
                         style={{ backgroundColor: testConfig.accentColor }}
                       >
                         <div className="absolute -right-4 -top-4 w-20 h-20 bg-white/10 rounded-full"></div>
@@ -756,7 +769,7 @@ export default router;`;
                           { name: 'Lainnya', icon: '•••' }
                         ].map((menu, idx) => (
                           <div key={idx} className="flex flex-col items-center gap-1.5 cursor-pointer">
-                            <div className="w-12 h-12 bg-white rounded-full shadow-sm flex items-center justify-center border border-slate-100 text-xl hover:scale-105 transition-transform">
+                            <div className={`w-12 h-12 bg-white shadow-sm flex items-center justify-center border border-slate-100 text-xl hover:scale-105 transition-transform ${testConfig.templateId === 'template-2' ? 'rounded-2xl' : 'rounded-full'}`}>
                               {menu.icon}
                             </div>
                             <span className="text-[10px] text-slate-600 font-medium">{menu.name}</span>
@@ -766,8 +779,8 @@ export default router;`;
 
                       {/* Latest Transactions */}
                       <div>
-                        <h3 className="text-xs font-bold text-slate-800 mb-2 mt-2">Transaksi Terakhir</h3>
-                        <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden divide-y divide-slate-100">
+                        <h3 className={`text-xs font-bold text-slate-800 mb-2 mt-2 ${testConfig.templateId === 'template-2' ? 'px-1' : ''}`}>Transaksi Terakhir</h3>
+                        <div className={`bg-white shadow-sm border border-slate-100 overflow-hidden divide-y divide-slate-100 ${testConfig.templateId === 'template-2' ? 'rounded-2xl' : 'rounded-xl'}`}>
                           {[
                             { name: 'Pulsa Telkomsel 50rb', price: 'Rp 50.500', status: 'Sukses', color: 'text-green-600' },
                             { name: 'Token PLN 100rb', price: 'Rp 100.200', status: 'Pending', color: 'text-orange-500' },
