@@ -1,0 +1,8 @@
+{
+  "name": "QianPulsa Tenant Manager",
+  "description": "Dashboard for managing QianPulsa white-label tenants and keystores",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
